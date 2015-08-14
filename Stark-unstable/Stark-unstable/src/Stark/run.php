@@ -13,8 +13,14 @@ if (file_exists($file) === false) {
     exit_by_error("Config file '{$file}' is not exists");
 }
 
+echo "get config file - " . $file . "\n";
+
 try {
-    $daemon = new \Stark\Daemon\Master(get_options($file));
+   
+    echo date('r') . " | create daemon and start it" . PHP_EOL;
+    $options = get_options($file);
+    echo date('r') . " | " . "get options by config file - {$file} - " .json_encode($options) . PHP_EOL;
+    $daemon = new \Stark\Daemon\Master($options);
     $daemon->start();
 } catch (Exception $e) {
     exit_by_error($e->getMessage());
@@ -48,11 +54,13 @@ function include_run_file($dir, $run_file) {
 
 function get_options($file) {
     $config = parse_ini_file($file, true);
+    echo date('r') . " | " . "get config by parse config.ini - {$file} - " . json_encode($config) . PHP_EOL;
     if (empty($config)) {
         exit_by_error("Config file '{$file}' is invalid");
     }
 
     include_run_file(dirname($file), get_option_value($config, 'run.script_file'));
+    echo date('r') . " | " . "include run script file - " . get_option_value($config, 'run.script_file') . PHP_EOL;
 
     return array(
         'consumer' => array(
@@ -63,6 +71,27 @@ function get_options($file) {
                 'complete' => 'complete',
             ),
         ),
+
+        'queue' => array(
+            'class' => '\\Stark\\Daemon\\Queue\\RedisQueue',
+            'options' => array(
+            	'host' => get_option_value($config, 'queue.host', '127.0.0.1'),
+            	'port' => get_option_value($config, 'queue.port', 6379),
+            	'queueKey' => get_option_value($config, 'queue.queueKey', ""),
+                 
+            ),
+        ),
+/*
+        'queue' => array(
+            'class' => '\\Stark\\Daemon\\Queue\\Callback',
+            'options' => array(
+                'init' => 'init',
+                'pop' => 'pop',
+                'complete' => 'complete',
+            ),
+        ),
+*/
+
         'master' => array(
             'name' => get_option_value($config, 'main.name', 'Stark_' . time()),
             'host' => get_option_value($config, 'main.host', '127.0.0.1'),

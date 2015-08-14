@@ -45,27 +45,44 @@ class Master extends \Stark\Core\Options {
     
     public function start() {
         ini_set('memory_limit', $this->_memoryLimit);
+        echo "--------------check Enviroments----------- \n";
         $this->_checkEnviroments();
+        echo "--------------initialize something---------\n";
         $this->_initialize();
 
+        echo "-------------check the daemon is running--------------\n";
         $this->_daemonIsRunning();
 
+        echo "-------------fork pid for daemon----------------------\n";
         \Stark\Core\System::runInBackground();
         $this->_pid = posix_getpid();
         $this->_createPidFile();
         \Stark\Core\System::setAffinity($this->_pid);
         \Stark\Core\System::setProcTitle($this->_pid, "daemon '{$this->_name}'");
+        echo "--------create sample worker----------------\n";
 
         //sample worker
         $this->_createSampleWorker();
+         
 
+        echo "--------------start daemon-------------- \n";
         //start daemon
         $this->_startTime = microtime(true);
+        
+        echo "------------------set up signal---------------\n";
         $this->_setupSignal();
+
+        echo "------------------create daemon socket for local inter-proc communication---------------\n";
         $this->_createDaemonSocket();
+
+        echo "-----------------create admin socket for internet commuication--------------";
         $this->_createAdminSocket();
+
+        echo "-----------------create workers and start them--------------------\n";
         $this->_startWorkers();
-        $this->_startLoop();
+
+        echo "-----------------start loop to waite workerclients commands and adminclients commands------------------\n";
+        $this->_startLoop(); 
     }
 
     private function _checkEnviroments() {
@@ -84,6 +101,8 @@ class Master extends \Stark\Core\Options {
         $this->_initializeWorkingDirectory();
         $this->_initializeFiles();
         $this->_checkParameters();
+        $this->_log->log("Master.php | initialize | pid file path - " . $this->_pidFile);
+        $this->_log->log("Master.php | initialize | socket file path - " . $this->_daemonSocketFile);
     }
 
     private function _initializeWorkingDirectory() {
@@ -140,6 +159,7 @@ class Master extends \Stark\Core\Options {
         if (file_put_contents($this->_pidFile, $this->_pid) == false) {
             $this->_exit("Unable to write pid file '{$this->_pidFile}'");
         }
+        $this->_log->log("write pid into pidfile - " . $this->_pid . " - file - " . $this->_pidFile);
     }
 
     private function _createSampleWorker() {
@@ -292,7 +312,7 @@ class Master extends \Stark\Core\Options {
     }
     
     private function _startLoop() {
-        $this->_log->log("Starting daemon: {$this->_name}", \Stark\Core\Log\Level::INFO);
+        $this->_log->log("Master.php | startLoop | Starting daemon: {$this->_name}", \Stark\Core\Log\Level::INFO);
 
         $time = microtime(true);
         $lastWorkerTime = $time;
@@ -377,6 +397,8 @@ class Master extends \Stark\Core\Options {
         foreach ($this->_adminClients as $key => $clientInfo) {
             $client = $clientInfo['client'];
             $responseValue = Protocol::read($client);
+            
+            
 
             if (empty($responseValue)) {
                 if (is_resource($client)) {
@@ -439,7 +461,7 @@ class Master extends \Stark\Core\Options {
                 Protocol::sendLine($client, 'Wrong client.');
                 break;
         }
-
+        echo "_responseCommand - $commandHandle - " . json_encode($arguments) ."\n";
         if (method_exists($this, $commandHandle)) {
             return call_user_func_array(array($this, $commandHandle), array($client, $arguments, $from));
         } else {
@@ -505,6 +527,7 @@ class Master extends \Stark\Core\Options {
     }
 
     private function _sendResponseToManager($client, $response) {
+        var_dump($response);
         if (is_array($response)) {
             Protocol::sendMultiBulk($client, $response);
         } else {
@@ -561,19 +584,26 @@ class Master extends \Stark\Core\Options {
         return $status;
     }
 
+    // set master options and create master object 
     protected function _setMasterOptions($options) {
+        echo date('r') . " | " . "Master.php | setMasterOptions | set Master Options - " . json_encode($options) . PHP_EOL;
         return $this->setOptions($options);
     }
 
+    
     protected function _setQueueOptions($options) {
+        echo date('r') . " | " . "Master.php | setQueueOptions | set Queue Options - " . json_encode($options) . PHP_EOL;
         return $this->_setClassOptionsByType($options, 'Queue');
     }
 
+    // set consumer options and create consumer object
     protected function _setConsumerOptions($options) {
+        echo date('r') . " | " . "Master.php | setConsumerOptions | set Consumer Options - " . json_encode($options) . PHP_EOL;
         return $this->_setClassOptionsByType($options, 'Consumer');
     }
 
     private function _setClassOptionsByType($options, $type) {
+        echo date('r') . " | " . "Master.php | setClassOptionsByType | set class options by type - {$type} - " . json_encode($options) . PHP_EOL;
         if (empty($options['class'])) {
             return false;
         }
@@ -586,8 +616,10 @@ class Master extends \Stark\Core\Options {
         if (class_exists($className) == false) {
             return false;
         }
+        echo date('r') . " | " . "Master.php | setClassOptionsByType | get class name - {$className}" . PHP_EOL;
         
         $property = '_' . lcfirst($type);
+	echo date('r') . " | " . "Master.php | setClassOptionsByType | new {$type} object as master\'s {$property}" . PHP_EOL; 
         $this->$property = new $className(isset($options['options']) ? $options['options'] : array());
 
         return true;
